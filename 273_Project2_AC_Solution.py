@@ -9,15 +9,13 @@ Created on Wed Jul 30 17:45:09 2025
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
-import random as random
 
 #simulation is working but there are some issues
 #the derivatives from point to point are very small
 #this means the learning rate needs to be very high, especially when ecoli are from from source
 #this is causing some weird behavior where sometimes they find it sometimes not
 
-##TO_DO
-##Develop a better equation for creating the gradient
+## Check TO-DO comments throughout for what needs to get done!
 
 class EColi:
     def __init__(self, N, num_ecoli=1, box_width=1, box_height=1, 
@@ -30,36 +28,40 @@ class EColi:
         self.learning_rate = learning_rate
         self.memory = memory
         
-        #setup for seeding ecoli at random positions
-        self.num_ecoli = num_ecoli
-        self.grad_seeds = grad_seeds
+        #setup for grid
         self.x_bounds = box_width/2
         self.y_bounds = box_height/2
-        
         self.grid_res = grid_res
         self.x_grid = np.linspace(-self.x_bounds, self.x_bounds, grid_res)
         self.y_grid = np.linspace(-self.y_bounds, self.y_bounds, grid_res)
         
+        #setup for seeding ecoli at random positions
+        self.num_ecoli = num_ecoli
         self.X = np.zeros((num_ecoli,N), dtype=int)
         self.Y = np.zeros((num_ecoli,N), dtype=int)
         self.X[:,0] = np.random.randint(0, len(self.x_grid), (num_ecoli,))
         self.Y[:,0] = np.random.randint(0, len(self.y_grid), (num_ecoli,))
         
         #setup for seeding gradient
+        self.grad_seeds = grad_seeds
         self.X_grad, self.Y_grad = np.meshgrid(self.x_grid,self.y_grid)
         self.grad_xcenter = np.random.randint(0, len(self.x_grid), (self.grad_seeds,))
         self.grad_ycenter = np.random.randint(0, len(self.y_grid), (self.grad_seeds,))
         self.pdf = np.zeros((len(self.x_grid),len(self.y_grid)))
         
+        #used for conversion from index to grid for plot routine
         self.ecoli_grid_xpos = np.zeros((self.num_ecoli,self.N))
         self.ecoli_grid_ypos = np.zeros((self.num_ecoli,self.N))
         
 
     def tumble_ecoli(self, n):
         
+        #pick a number between -1 and 1, tumble_step number of times
+        #sum across rows then execute move
         x_tumble = np.random.choice([-1,1], size = (self.num_ecoli, self.tumble_step)).sum(axis=1)
         y_tumble = np.random.choice([-1,1], size = (self.num_ecoli, self.tumble_step)).sum(axis=1)
         
+        #if move is out of bounds then clip
         self.X[:,n+1] = np.clip((self.X[:,n] + x_tumble), a_min=0, a_max = len(self.x_grid)-1)
         self.Y[:,n+1] = np.clip((self.Y[:,n] + y_tumble), a_min=0, a_max = len(self.y_grid)-1)
         
@@ -84,7 +86,7 @@ class EColi:
         x_deriv = np.zeros((self.num_ecoli,))
         y_deriv = np.zeros((self.num_ecoli,))
         
-        #mask to prevent divide by zero error if delta is zero
+        #bool mask to prevent divide by zero error if delta is zero
         x_mask = (delta_x != 0)
         x_deriv[x_mask] = (x_conc_fwd[x_mask] - x_conc_bwd[x_mask]) / (2 * delta_x[x_mask])
         
@@ -92,13 +94,16 @@ class EColi:
         y_deriv[y_mask] = (y_conc_fwd[y_mask] - y_conc_bwd[y_mask]) / (2 * delta_y[y_mask])
 
         
+        #clip the run part of the expression, part of the issue with this approach
+        #is that this needs to be a whole number so any value below 0.5 is 0
         #if run is out of bounds then clip
-        x_run_exp = np.round(self.learning_rate * x_deriv)
+        x_run_exp = np.round(self.learning_rate * x_deriv) #can we lower learning rate as deriv increases to prevent overshoot near center?
         y_run_exp = np.round(self.learning_rate * y_deriv)
         self.X[:,n+1] = np.clip((self.X[:,n] + x_run_exp), a_min=0, a_max = len(self.x_grid)-1)
         self.Y[:,n+1] = np.clip((self.Y[:,n] + y_run_exp), a_min=0, a_max = len(self.y_grid)-1)
 
-    #Try and figure out a vectorized way to do this
+
+# TO_DO: Try and figure out a vectorized way to do this ############################################
     def index_to_grid(self):
         
         for i in range(self.num_ecoli):
@@ -108,6 +113,7 @@ class EColi:
         
 
 
+# TO-DO: Test different calculation approaches for conc. gradient other than pdf ###################
     def create_gradient(self):
 
         for n in range(self.grad_seeds):
@@ -116,7 +122,7 @@ class EColi:
 
 
 
-
+# TO-DO: Add axis labels and improve look of plot #################################################
     def plot_routine_track(self):
         
         plt.figure(figsize=(8,8))
@@ -128,6 +134,14 @@ class EColi:
         plt.xlim(-self.x_bounds,self.x_bounds)
         plt.ylim(-self.y_bounds,self.y_bounds)
         plt.show()
+
+
+# TO-DO: Add plot_routine_histogram ###############################################################
+
+
+
+# TO-DO: Create run simulation function ###########################################################
+##       allow for arguments to get passed in for adjusting starting params #######################
 
 N=1000
 
