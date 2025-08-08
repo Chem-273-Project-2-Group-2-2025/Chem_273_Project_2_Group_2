@@ -34,7 +34,8 @@ class EColi:
         self.grid_res = grid_res
         self.x_grid = np.linspace(-self.x_bounds, self.x_bounds, grid_res)
         self.y_grid = np.linspace(-self.y_bounds, self.y_bounds, grid_res)
-        
+
+# TO-DO: need to also have an option to seed all ecoli at the same starting position ################
         #setup for seeding ecoli at random positions
         self.num_ecoli = num_ecoli
         self.X = np.zeros((num_ecoli,N), dtype=int)
@@ -103,7 +104,7 @@ class EColi:
         self.Y[:,n+1] = np.clip((self.Y[:,n] + y_run_exp), a_min=0, a_max = len(self.y_grid)-1)
 
 
-# TO_DO: Try and figure out a vectorized way to do this ############################################
+# TO-DO: Try and figure out a vectorized way to do this ############################################
     def index_to_grid(self):
         
         for i in range(self.num_ecoli):
@@ -114,8 +115,11 @@ class EColi:
 
 
 # TO-DO: Test different calculation approaches for conc. gradient other than pdf ###################
+# 1)Normal distribution function
+# 2)Linear function
+# 3)Polynomial?
     def create_gradient(self):
-
+        #this loop allows you to seed multiple center points for the gradient
         for n in range(self.grad_seeds):
             self.pdf += ((norm.pdf(self.X_grad, loc = self.x_grid[self.grad_xcenter[n]], scale=1) * \
                    norm.pdf(self.Y_grad, loc=self.y_grid[[self.grad_ycenter[n]]], scale=1)))
