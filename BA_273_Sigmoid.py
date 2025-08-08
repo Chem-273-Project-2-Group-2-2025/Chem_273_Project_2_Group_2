@@ -56,8 +56,8 @@ class Sim_Ecoli:
         
     def grad_point(self, x, y , eps= 1e-5):
         c0= self.concentration(x, y)
-        gx= (self.concentration(x+ eps, y)- c0)/ eps
-        gy = (self.concentration(x, y + eps)-c0)/ eps
+        gx= (self.concentration(x + eps, y)- c0)/ eps
+        gy = (self.concentration(x, y + eps)- c0)/ eps
         return gx, gy
     
     def _clamp_i(self, i):
@@ -78,9 +78,9 @@ class Sim_Ecoli:
                 self._clamp_i(i)
                 self.phase[i] += 1
             else:
-                x,y= self.positions[i]
+                x,y = self.positions[i]
                 gx, gy = self.grad_point(x, y)
-                gnorm= np.hypot(gx, gy)
+                gnorm = np.hypot(gx, gy)
                 if gnorm < 1e-12:
                     ux, uy = self.last_direction[i]
                 else: 
@@ -139,7 +139,7 @@ def plot_trajectories(trajectory, K= 50, bounds=(50,50)):
     plt.xlim(bounds)
     plt.ylim(bounds)
     plt.gca().set_aspect('equal', 'box')
-    plt.title(f"TRajectories ({K}/ {N} shown")
+    plt.title(f"Trajectories ({K}/ {N} shown")
     plt.xlabel("x")
     plt.ylabel("y")
     plt.show()
