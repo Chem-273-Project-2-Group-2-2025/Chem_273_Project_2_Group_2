@@ -19,14 +19,15 @@ from scipy.stats import norm
 
 class EColi:
     def __init__(self, N, num_ecoli=1, box_width=1, box_height=1, 
-                 grid_res = 500, tumble_step=5, learning_rate=50000, grad_seeds=1,
-                 memory = 4):
+                 grid_res = 500, tumble_step=3, learning_rate=10, grad_seeds=1,
+                 memory = 4, grad_type='gaussian'):
         
         #gradient descent parameters
         self.N = N
         self.tumble_step = tumble_step
         self.learning_rate = learning_rate
         self.memory = memory
+        self.grad_type = grad_type
         
         #setup for grid
         self.x_bounds = box_width/2
@@ -48,13 +49,17 @@ class EColi:
         self.X_grad, self.Y_grad = np.meshgrid(self.x_grid,self.y_grid)
         self.grad_xcenter = np.random.randint(0, len(self.x_grid), (self.grad_seeds,))
         self.grad_ycenter = np.random.randint(0, len(self.y_grid), (self.grad_seeds,))
-        self.pdf = np.zeros((len(self.x_grid),len(self.y_grid)))
+        self.grad = np.zeros((len(self.x_grid),len(self.y_grid)))
         
         #used for conversion from index to grid for plot routine
         self.ecoli_grid_xpos = np.zeros((self.num_ecoli,self.N))
         self.ecoli_grid_ypos = np.zeros((self.num_ecoli,self.N))
         
-
+        #Sum of squared gradients for adaptive learning rate (adagrad)
+        self.Gt_x = np.zeros((self.num_ecoli,self.N))
+        self.Gt_y = np.zeros((self.num_ecoli,self.N))
+        
+        
     def tumble_ecoli(self, n):
         
         #pick a number between -1 and 1, tumble_step number of times
@@ -78,14 +83,15 @@ class EColi:
         y_fwd = np.clip((self.Y[:,n] + delta_y), a_min=0, a_max = len(self.y_grid)-1)
         y_bwd = np.clip((self.Y[:,n] - delta_y), a_min=0, a_max = len(self.y_grid)-1)
         
-        #calculate concentration from pdf for fwd and bwd positions
-        x_conc_fwd = self.pdf[x_fwd, self.Y[:,n]]
-        x_conc_bwd = self.pdf[x_bwd, self.Y[:,n]]
-        y_conc_fwd = self.pdf[y_fwd, self.X[:,n]]
-        y_conc_bwd = self.pdf[y_bwd, self.X[:,n]]
+        #calculate concentration from grad for fwd and bwd positions
+        x_conc_fwd = self.grad[x_fwd, self.Y[:,n]]
+        x_conc_bwd = self.grad[x_bwd, self.Y[:,n]]
+        y_conc_fwd = self.grad[y_fwd, self.X[:,n]]
+        y_conc_bwd = self.grad[y_bwd, self.X[:,n]]
         
         x_deriv = np.zeros((self.num_ecoli,))
         y_deriv = np.zeros((self.num_ecoli,))
+        
         
         #bool mask to prevent divide by zero error if delta is zero
         x_mask = (delta_x != 0)
@@ -93,15 +99,26 @@ class EColi:
         
         y_mask = (delta_y != 0)
         y_deriv[y_mask] = (y_conc_fwd[y_mask] - y_conc_bwd[y_mask]) / (2 * delta_y[y_mask])
-
         
-        #clip the run part of the expression, part of the issue with this approach
-        #is that this needs to be a whole number so any value below 0.5 is 0
-        #if run is out of bounds then clip
-        x_run_exp = np.round(self.learning_rate * x_deriv) #can we lower learning rate as deriv increases to prevent overshoot near center?
-        y_run_exp = np.round(self.learning_rate * y_deriv)
+        #attempted to introduce adap[tive gradient (adagrad) approach for learning rate
+        self.Gt_x[:,n] = x_deriv**2
+        self.Gt_y[:,n] = y_deriv**2
+        
+        adapt_lr_x = self.learning_rate / np.sqrt((np.sum(self.Gt_x, axis=1)) + np.exp(-12))
+        adapt_lr_y = self.learning_rate / np.sqrt((np.sum(self.Gt_x, axis=1)) + np.exp(-12))
+        
+        x_run_exp = np.round(adapt_lr_x * x_deriv)
+        y_run_exp = np.round(adapt_lr_y * y_deriv)
         self.X[:,n+1] = np.clip((self.X[:,n] + x_run_exp), a_min=0, a_max = len(self.x_grid)-1)
         self.Y[:,n+1] = np.clip((self.Y[:,n] + y_run_exp), a_min=0, a_max = len(self.y_grid)-1)
+
+
+        #old learning rate approach
+        
+        # x_run_exp = np.round(self.learning_rate * x_deriv) #can we lower learning rate as deriv increases to prevent overshoot near center?
+        # y_run_exp = np.round(self.learning_rate * y_deriv)
+        # self.X[:,n+1] = np.clip((self.X[:,n] + x_run_exp), a_min=0, a_max = len(self.x_grid)-1)
+        # self.Y[:,n+1] = np.clip((self.Y[:,n] + y_run_exp), a_min=0, a_max = len(self.y_grid)-1)
 
 
 # TO-DO: Try and figure out a vectorized way to do this ############################################
@@ -115,22 +132,41 @@ class EColi:
 
 
 # TO-DO: Test different calculation approaches for conc. gradient other than pdf ###################
-# 1)Normal distribution function
-# 2)Linear function
-# 3)Polynomial?
-    def create_gradient(self):
+
+    def gaussian_grad(self, mesh, mu, sigma):
+        return (1 / sigma * np.sqrt(2 * np.pi)) * np.exp(-0.5 * ((mesh - mu)/(sigma))**2)
+    
+    def linear_grad(self, mesh, loc, slope, height):
+        return -slope*np.abs(mesh - loc) + height
+    
+    def parabola_grad(self, mesh, loc, width, height):
+        return -((mesh-loc)**2 / width**2) + height
+
+#make a switch for grad_type
+    def create_gradient(self, grad_type="gaussian"):
         #this loop allows you to seed multiple center points for the gradient
         for n in range(self.grad_seeds):
-            self.pdf += ((norm.pdf(self.X_grad, loc = self.x_grid[self.grad_xcenter[n]], scale=1) * \
-                   norm.pdf(self.Y_grad, loc=self.y_grid[[self.grad_ycenter[n]]], scale=1)))
-
+            match grad_type:
+                case "gaussian":
+                    self.grad += (self.gaussian_grad(self.X_grad, self.x_grid[self.grad_xcenter[n]], sigma=1)) * \
+                                 (self.gaussian_grad(self.Y_grad, self.y_grid[self.grad_ycenter[n]], sigma=1))
+                
+                case "linear":
+                    self.grad += (self.linear_grad(self.X_grad, self.x_grid[self.grad_xcenter[n]], slope=0.2, height=10)) +\
+                                 (self.linear_grad(self.Y_grad, self.y_grid[self.grad_ycenter[n]], slope=0.2, height=10))
+                                 
+                case "parabola":
+                    self.grad += (self.parabola_grad(self.X_grad, self.x_grid[self.grad_xcenter[n]], width=3, height=10)) + \
+                                 (self.parabola_grad(self.Y_grad, self.y_grid[self.grad_ycenter[n]], width=3, height =10))
+                         
 
 
 # TO-DO: Add axis labels and improve look of plot #################################################
+# Make it so first and lost point are marked with an X of different colors, add legend for marker #
     def plot_routine_track(self):
         
         plt.figure(figsize=(8,8))
-        plt.contourf(self.X_grad, self.Y_grad, self.pdf, levels=10)
+        plt.contourf(self.X_grad, self.Y_grad, self.grad, levels=5, cmap='Grays')
 
         for n in range(self.num_ecoli):
             plt.plot(self.ecoli_grid_xpos[n,:],self.ecoli_grid_ypos[n,:], marker= 'o', markersize=1, linestyle='-', color='red')
@@ -150,8 +186,7 @@ class EColi:
 N=1000
 
 ecoli = EColi(N)
-ecoli.create_gradient()
-
+ecoli.create_gradient(ecoli.grad_type)
 
 for n in range(N-1):
     if (n+1) % (ecoli.memory + 1) ==0:
