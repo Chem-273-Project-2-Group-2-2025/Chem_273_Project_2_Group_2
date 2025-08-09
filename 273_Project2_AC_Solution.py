@@ -8,19 +8,10 @@ Created on Wed Jul 30 17:45:09 2025
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.stats import norm
-
-#simulation is working but there are some issues
-#the derivatives from point to point are very small
-#this means the learning rate needs to be very high, especially when ecoli are from from source
-#this is causing some weird behavior where sometimes they find it sometimes not
-
-## Check TO-DO comments throughout for what needs to get done!
 
 class EColi:
-    def __init__(self, N, num_ecoli=1, box_width=1, box_height=1, 
-                 grid_res = 500, tumble_step=3, learning_rate=10, grad_seeds=1,
-                 memory = 4, grad_type='gaussian'):
+    def __init__(self, N, num_ecoli=1, box_length=1, grid_res = 350, tumble_step=3, 
+                 learning_rate=25, memory = 4, grad_type='gaussian', origin_type='random'):
         
         #gradient descent parameters
         self.N = N
@@ -30,8 +21,9 @@ class EColi:
         self.grad_type = grad_type
         
         #setup for grid
-        self.x_bounds = box_width/2
-        self.y_bounds = box_height/2
+        self.box_length = box_length
+        self.x_bounds = box_length/2
+        self.y_bounds = box_length/2
         self.grid_res = grid_res
         self.x_grid = np.linspace(-self.x_bounds, self.x_bounds, grid_res)
         self.y_grid = np.linspace(-self.y_bounds, self.y_bounds, grid_res)
@@ -41,14 +33,22 @@ class EColi:
         self.num_ecoli = num_ecoli
         self.X = np.zeros((num_ecoli,N), dtype=int)
         self.Y = np.zeros((num_ecoli,N), dtype=int)
-        self.X[:,0] = np.random.randint(0, len(self.x_grid), (num_ecoli,))
-        self.Y[:,0] = np.random.randint(0, len(self.y_grid), (num_ecoli,))
+        self.origin_type = origin_type
+        if self.origin_type == 'random':
+            self.X[:,0] = np.random.randint(0.1*len(self.x_grid), 0.3*len(self.x_grid), (num_ecoli,))
+            self.Y[:,0] = np.random.randint(0.1*len(self.y_grid), 0.3*len(self.y_grid), (num_ecoli,))
+        if self.origin_type == 'together':
+            self.X[:,0] = int(0.1*len(self.x_grid))
+            self.Y[:,0] = int(0.1*len(self.y_grid))
+            # self.X[:,0] = np.array((num_ecoli,0.25*len(self.x_grid)), dtype=int)
+            # self.Y[:,0] = np.array((num_ecoli,0.25*len(self.x_grid)), dtype=int)
         
         #setup for seeding gradient
-        self.grad_seeds = grad_seeds
         self.X_grad, self.Y_grad = np.meshgrid(self.x_grid,self.y_grid)
-        self.grad_xcenter = np.random.randint(0, len(self.x_grid), (self.grad_seeds,))
-        self.grad_ycenter = np.random.randint(0, len(self.y_grid), (self.grad_seeds,))
+        self.grad_xcenter = int(grid_res*0.8)
+        self.grad_ycenter = int(grid_res*0.8)
+        self.grad_xcenter_grid = self.x_grid[self.grad_xcenter]
+        self.grad_ycenter_grid = self.y_grid[self.grad_ycenter]
         self.grad = np.zeros((len(self.x_grid),len(self.y_grid)))
         
         #used for conversion from index to grid for plot routine
@@ -59,13 +59,17 @@ class EColi:
         self.Gt_x = np.zeros((self.num_ecoli,self.N))
         self.Gt_y = np.zeros((self.num_ecoli,self.N))
         
+        #Distance index for histogram
+        self.I = [1, 10, 50, 100, 1000]
+        self.distance = np.zeros((self.num_ecoli,len(self.I)))
+        
         
     def tumble_ecoli(self, n):
         
         #pick a number between -1 and 1, tumble_step number of times
         #sum across rows then execute move
-        x_tumble = np.random.choice([-1,1], size = (self.num_ecoli, self.tumble_step)).sum(axis=1)
-        y_tumble = np.random.choice([-1,1], size = (self.num_ecoli, self.tumble_step)).sum(axis=1)
+        x_tumble = np.random.choice([-2,2], size = (self.num_ecoli, self.tumble_step)).sum(axis=1)
+        y_tumble = np.random.choice([-2,2], size = (self.num_ecoli, self.tumble_step)).sum(axis=1)
         
         #if move is out of bounds then clip
         self.X[:,n+1] = np.clip((self.X[:,n] + x_tumble), a_min=0, a_max = len(self.x_grid)-1)
@@ -100,7 +104,7 @@ class EColi:
         y_mask = (delta_y != 0)
         y_deriv[y_mask] = (y_conc_fwd[y_mask] - y_conc_bwd[y_mask]) / (2 * delta_y[y_mask])
         
-        #attempted to introduce adap[tive gradient (adagrad) approach for learning rate
+        #attempted to introduce adaptive gradient (adagrad) approach for learning rate
         self.Gt_x[:,n] = x_deriv**2
         self.Gt_y[:,n] = y_deriv**2
         
@@ -128,10 +132,15 @@ class EColi:
             for j in range(self.N):
                 self.ecoli_grid_xpos[i,j] = self.x_grid[self.X[i,j]]
                 self.ecoli_grid_ypos[i,j] = self.y_grid[self.Y[i,j]]
-        
+    
+    def calculate_distance(self):
 
+        dist_i = 0
+        for i in self.I:
+            self.distance[:,dist_i] = np.sqrt((self.grad_xcenter_grid - self.ecoli_grid_xpos[:,i-1])**2 + \
+                                    (self.grad_ycenter_grid - self.ecoli_grid_xpos[:,i-1])**2)
+            dist_i += 1
 
-# TO-DO: Test different calculation approaches for conc. gradient other than pdf ###################
 
     def gaussian_grad(self, mesh, mu, sigma):
         return (1 / sigma * np.sqrt(2 * np.pi)) * np.exp(-0.5 * ((mesh - mu)/(sigma))**2)
@@ -142,58 +151,101 @@ class EColi:
     def parabola_grad(self, mesh, loc, width, height):
         return -((mesh-loc)**2 / width**2) + height
 
-#make a switch for grad_type
-    def create_gradient(self, grad_type="gaussian"):
-        #this loop allows you to seed multiple center points for the gradient
-        for n in range(self.grad_seeds):
-            match grad_type:
-                case "gaussian":
-                    self.grad += (self.gaussian_grad(self.X_grad, self.x_grid[self.grad_xcenter[n]], sigma=1)) * \
-                                 (self.gaussian_grad(self.Y_grad, self.y_grid[self.grad_ycenter[n]], sigma=1))
-                
-                case "linear":
-                    self.grad += (self.linear_grad(self.X_grad, self.x_grid[self.grad_xcenter[n]], slope=0.2, height=10)) +\
-                                 (self.linear_grad(self.Y_grad, self.y_grid[self.grad_ycenter[n]], slope=0.2, height=10))
-                                 
-                case "parabola":
-                    self.grad += (self.parabola_grad(self.X_grad, self.x_grid[self.grad_xcenter[n]], width=3, height=10)) + \
-                                 (self.parabola_grad(self.Y_grad, self.y_grid[self.grad_ycenter[n]], width=3, height =10))
-                         
 
+    def create_gradient(self):
+
+        match self.grad_type:
+            case "gaussian":
+                self.grad = (self.gaussian_grad(self.X_grad, self.x_grid[self.grad_xcenter], sigma=1)) * \
+                              (self.gaussian_grad(self.Y_grad, self.y_grid[self.grad_ycenter], sigma=1))
+                
+            case "linear":
+                self.grad = (self.linear_grad(self.X_grad, self.x_grid[self.grad_xcenter], slope=0.5, height=10)) +\
+                              (self.linear_grad(self.Y_grad, self.y_grid[self.grad_ycenter], slope=0.5, height=10))
+                                 
+            case "parabola":
+                self.grad = (self.parabola_grad(self.X_grad, self.x_grid[self.grad_xcenter], width=1.5, height=10)) + \
+                              (self.parabola_grad(self.Y_grad, self.y_grid[self.grad_ycenter], width=1.5, height =10))
+                         
 
 # TO-DO: Add axis labels and improve look of plot #################################################
 # Make it so first and lost point are marked with an X of different colors, add legend for marker #
     def plot_routine_track(self):
         
         plt.figure(figsize=(8,8))
-        plt.contourf(self.X_grad, self.Y_grad, self.grad, levels=5, cmap='Grays')
+        plt.contourf(self.X_grad, self.Y_grad, self.grad, levels=5, cmap='grey_r')
 
         for n in range(self.num_ecoli):
-            plt.plot(self.ecoli_grid_xpos[n,:],self.ecoli_grid_ypos[n,:], marker= 'o', markersize=1, linestyle='-', color='red')
+            plt.plot(self.ecoli_grid_xpos[n,:],self.ecoli_grid_ypos[n,:], marker= 'o', 
+                     markerfacecolor='none', markeredgecolor='white', markersize=4, 
+                     linestyle='-', color='white', alpha =0.5)
+        
+        for n in range(self.num_ecoli):
+            plt.scatter(self.ecoli_grid_xpos[n,0], self.ecoli_grid_ypos[n,0], marker= 'x',
+                        s=100, color='blue')
+            plt.scatter(self.ecoli_grid_xpos[n,-1], self.ecoli_grid_ypos[n,-1], marker= 'x',
+                        s=100, color='red')
         
         plt.xlim(-self.x_bounds,self.x_bounds)
         plt.ylim(-self.y_bounds,self.y_bounds)
         plt.show()
+    
+    def plot_routine_source_distance(self):
+        
+        layout = ['A', 'B', 'C', 'D', 'E']
+        fig_dict = dict(zip(self.I, layout))
+        
+        fig, ax = plt.subplot_mosaic([['A'],['B'],['C'],['D'],['E']], 
+                                     layout="constrained", figsize=(8,12))
+        
+        dist_i = 0
+        for i in self.I:
+            ax[fig_dict[i]].hist(self.distance[:,dist_i], bins=200, range=(0, self.box_length), color='black')
+            ax[fig_dict[i]].text(0.05,0.85,f"I = {i}", fontsize = 14, transform=ax[fig_dict[i]].transAxes)
+            dist_i += 1
+        
+        ax['A'].set_title(f"Simulation of {self.num_ecoli} E.coli", fontsize=20)
+        ax['C'].set_ylabel("number of E.coli", fontsize=16)
+        ax['E'].set_xlabel("distance from the source", fontsize=16)
 
 
-# TO-DO: Add plot_routine_histogram ###############################################################
 
+def ecoli_simulation(num_ecoli, N=1000, origin='random', grad="gaussian", track_plot=False, dist_plot=False):
+    """
+    Parameters
+    ----------
+    num_ecoli : int, required
+        Number of E.coli to seed.
+    N : int, optional
+        Set number of iterations. The default is 1000.
+    origin : str, optional
+        E.coli seeding ('random', 'together'). The default is 'random'.
+    grad : str, optional
+        Gradient type ('guassian', 'linear', 'parabola'). The default is "gaussian".
+    track_plot : bool, optional
+        Run tracking plot routine. The default is False.
+    dist_plot : bool, optional
+        Run distance from source plot routine. The default is False.
+    """
 
+    ecoli = EColi(N, num_ecoli, grad_type=grad, origin_type=origin)
+    ecoli.create_gradient()
+    
+    for n in range(N-1):
+        if (n+1) % (ecoli.memory + 1) ==0:
+             ecoli.run_ecoli(n)
+        else:
+             ecoli.tumble_ecoli(n)
+    
+    ecoli.index_to_grid()
+    ecoli.calculate_distance()
 
-# TO-DO: Create run simulation function ###########################################################
-##       allow for arguments to get passed in for adjusting starting params #######################
+    if track_plot:
+        ecoli.plot_routine_track()
+    
+    if dist_plot:
+        ecoli.plot_routine_source_distance()
 
-N=1000
+    return ecoli
 
-ecoli = EColi(N)
-ecoli.create_gradient(ecoli.grad_type)
-
-for n in range(N-1):
-    if (n+1) % (ecoli.memory + 1) ==0:
-         ecoli.run_ecoli(n)
-    else:
-         ecoli.tumble_ecoli(n)
-
-
-ecoli.index_to_grid()
-ecoli.plot_routine_track()
+e = ecoli_simulation(num_ecoli=1, origin='random', track_plot=True)
