@@ -217,7 +217,7 @@ class EColi:
         
         dist_i = 0
         for i in self.I:
-            ax[fig_dict[i]].hist(self.distance[:,dist_i], bins=200, range=(0, self.box_length), color='black')
+            ax[fig_dict[i]].hist(self.distance[:,dist_i], bins=200, range=(0, np.max(self.distance)), color='black')
             ax[fig_dict[i]].text(0.05,0.85,f"I = {i}", fontsize = 14, transform=ax[fig_dict[i]].transAxes)
             dist_i += 1
         
@@ -264,5 +264,5 @@ def ecoli_simulation(num_ecoli, N=1000, origin='random', grad="gaussian", track_
 
     return ecoli
 
-e = ecoli_simulation(num_ecoli=1, grad='linear', origin='random', track_plot=True)
-#e = ecoli_simulation(num_ecoli=1000, grad='parabola', origin='together', dist_plot=True)
+#e = ecoli_simulation(num_ecoli=1, grad='linear', origin='random', track_plot=True)
+e = ecoli_simulation(num_ecoli=1000, grad='gaussian', origin='together', dist_plot=True)
