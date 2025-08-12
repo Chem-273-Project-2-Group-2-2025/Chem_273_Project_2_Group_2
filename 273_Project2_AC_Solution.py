@@ -106,7 +106,7 @@ class EColi:
         self.Gt_y[:,n] = y_deriv**2
         
         self.adapt_lr_x[:,n] = self.learning_rate / np.sqrt((np.sum(self.Gt_x, axis=1)) + np.exp(-12))
-        self.adapt_lr_y[:,n] = self.learning_rate / np.sqrt((np.sum(self.Gt_x, axis=1)) + np.exp(-12))
+        self.adapt_lr_y[:,n] = self.learning_rate / np.sqrt((np.sum(self.Gt_y, axis=1)) + np.exp(-12))
         
         x_run_exp = self.adapt_lr_x[:,n] * x_deriv
         y_run_exp = self.adapt_lr_y[:,n] * y_deriv
