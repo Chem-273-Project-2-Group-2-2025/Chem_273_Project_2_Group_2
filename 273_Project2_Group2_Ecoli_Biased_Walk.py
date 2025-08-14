@@ -241,7 +241,7 @@ class EColi:
 
 
 # This is the primary simulation function
-# generates an E.coli class with specificed parameters and performs specified plotting
+# generates an E.coli class with specified parameters and performs specified plotting
 # returns the class type for post simulation review if desired
 def ecoli_simulation(num_ecoli, N=1000, mem = 4, origin='random', grad="gaussian", track_plot=False, dist_plot=False):
     """
