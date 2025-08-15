@@ -33,14 +33,14 @@ class EColi:
             self.X[:,0] = np.random.uniform(-self.bounds, 0, (num_ecoli,))
             self.Y[:,0] = np.random.uniform(-self.bounds, 0, (num_ecoli,))
         if self.origin_type == 'together':
-            self.X[:,0] = -self.bounds*0.8
-            self.Y[:,0] = -self.bounds*0.8
+            self.X[:,0] = -self.bounds * 0.8
+            self.Y[:,0] = -self.bounds * 0.8
 
         
         #setup for seeding gradient
         self.X_grad, self.Y_grad = np.meshgrid(self.grid, self.grid)
-        self.grad_xcenter = self.bounds*0.8
-        self.grad_ycenter = self.bounds*0.8
+        self.grad_xcenter = self.bounds * 0.8
+        self.grad_ycenter = self.bounds * 0.8
         self.grad = np.zeros((len(self.grid),len(self.grid)))
         
         #Sum of squared gradients for adaptive learning rate (adagrad)
@@ -65,8 +65,8 @@ class EColi:
         
     def tumble_ecoli(self, n):
         
-        dx = np.random.uniform(-self.tumble_step,self.tumble_step,(1, self.num_ecoli))
-        dy = np.random.uniform(-self.tumble_step,self.tumble_step,(1, self.num_ecoli))
+        dx = np.random.uniform(-self.tumble_step,self.tumble_step, self.num_ecoli)
+        dy = np.random.uniform(-self.tumble_step,self.tumble_step, self.num_ecoli)
         
         self.X[:,n+1] = np.clip((self.X[:,n] + dx), a_min=-self.bounds, a_max=self.bounds)
         self.Y[:,n+1] = np.clip((self.Y[:,n] + dy), a_min=-self.bounds, a_max=self.bounds)
@@ -133,7 +133,7 @@ class EColi:
     # ecoli and gradient generation call on conc_calc which depending on gradient type
     # applies the correct function
     def gaussian_grad(self, value, mu):
-        return (1 / self.gaus_sigma * np.sqrt(2 * np.pi)) * np.exp(-0.5 * ((value - mu)/(self.gaus_sigma))**2)
+        return (1 / (self.gaus_sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((value - mu)/(self.gaus_sigma))**2)
     
     def linear_grad(self, value, loc):
         return -self.lin_slope*np.abs(value - loc) + self.lin_height
