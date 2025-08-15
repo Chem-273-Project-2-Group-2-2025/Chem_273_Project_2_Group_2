@@ -321,9 +321,10 @@ def run_test_cases(test):
 ##### TEST 4 ##################################################################
     # testing impact of memory on E.coli
         case 4:
-            t4_1 = ecoli_simulation(num_ecoli=1, mem=3, grad='gaussian', origin='together', track_plot=True)
-            t4_2 = ecoli_simulation(num_ecoli=1, mem=2, grad='gaussian', origin='together', track_plot=True)
-            t4_3 = ecoli_simulation(num_ecoli=1, mem=1, grad='gaussian', origin='together', track_plot=True)
+            t4_1 = ecoli_simulation(num_ecoli=1, grad='gaussian', origin='together', track_plot=True)
+            t4_2 = ecoli_simulation(num_ecoli=1, mem=3, grad='gaussian', origin='together', track_plot=True)
+            t4_3 = ecoli_simulation(num_ecoli=1, mem=2, grad='gaussian', origin='together', track_plot=True)
+            t4_4 = ecoli_simulation(num_ecoli=1, mem=1, grad='gaussian', origin='together', track_plot=True)
             
         case _:
             print("Not a valid test group")
